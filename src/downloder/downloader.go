@@ -1,70 +1,70 @@
 package downloder
 
 import (
-	"fmt"
+	"context"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
+	"runtime"
+	"strconv"
+	"sync"
 
 	"github.com/pkg/errors"
+	"golang.org/x/sync/errgroup"
 )
 
 const acceptRangesHeaderKey = "Accept-Ranges"
 
-const (
-	acceptRangeBytes = "bytes"
-	acceptRangeNone = "none"
-)
+const acceptRangeBytes = "bytes"
 
-const defaultChunkSize = 100
+type indexChunk struct {
+	start uint64
+	end   uint64
+}
 
-type Downloader struct {}
+type Downloader struct{}
 
-func newDownloader() *Downloader {
+func NewDownloader() *Downloader {
 	return &Downloader{}
 }
 
-func (d *Downloader) Download(url url.URL) error {
+func (d *Downloader) HTTPDownloadFile(url url.URL) error {
 	res, err := http.Get(url.String())
 	if err != nil {
-		return errors.Wrapf(err, "Failed HTTP GET URL:%s" , url.String())
+		return err
 	}
 	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		return errors.Errorf("HTTP status error: %s", res.Status)
+	}
 
 	acceptRange := res.Header.Get(acceptRangesHeaderKey)
 
-	// TODO:
-	var outDir = ""
+	// TODO: コマンドで指定する。
+	path := "./out" + url.Path
 
-	var downloadErr error
 	switch acceptRange {
-	case acceptRangeNone:
-		downloadErr = d.download(url, outDir)
 	case acceptRangeBytes:
-		downloadErr = d.downloadChunk()
+		// chunkSize は並列処理の同時実行数(利用可能なCPUのコア数)を基準とする。
+		cpus := runtime.NumCPU()
+		err = d.downloadChunk(path, res, cpus)
+
 	default:
-		msg := fmt.Sprintf("Invalid Accept-Ranges header: %s", acceptRange)
-		return errors.New(msg)
+		err = d.downloadSingle(path, res)
 	}
-	if downloadErr!= nil {
-		return errors.Wrapf(err, "Failed download %s", url.Path)
+	if err != nil {
+		return err
 	}
 
-	fmt.Println("Download Successfully !")
 	return nil
 }
 
-func (d *Downloader) download(
-	url url.URL,
+func (d *Downloader) downloadSingle(
 	dst string,
+	res *http.Response,
 ) error {
-	res, err := http.Get(url.String())
-	if err != nil {
-		return errors.Wrapf(err, "Failed HTTP GET URL:%s" , url.String())
-	}
-	defer res.Body.Close()
-
 	out, err := os.Create(dst)
 	if err != nil {
 		return err
@@ -79,8 +79,62 @@ func (d *Downloader) download(
 	return nil
 }
 
-// TODO
 func (d *Downloader) downloadChunk(
+	dst string,
+	res *http.Response,
+	chunkSize int,
 ) error {
+	size, err := d.getFileSizeFromContentLength(res)
+	if err != nil {
+		return err
+	}
+
+	var (
+		chunked = d.chunkFileSize(size, uint64(chunkSize))
+		ch      = make(chan struct{}, chunkSize)
+		eg      = errgroup.Group{}
+	)
+
+	// TODO:
+
 	return nil
+}
+
+func (d *Downloader) chunkFileSize(
+	size uint64,
+	chunkSize uint64,
+) []indexChunk {
+	splitSize := size / chunkSize
+
+	var chunked = make([]indexChunk, 0)
+	for i := uint64(0); i < size; i += splitSize {
+		idx := indexChunk{
+			start: i,
+			end:   i + splitSize,
+		}
+
+		if size < idx.end {
+			idx.end = size
+		}
+
+		chunked = append(chunked, idx)
+	}
+
+	return chunked
+}
+
+func (d *Downloader) getFileSizeFromContentLength(
+	res *http.Response,
+) (uint64, error) {
+	cLen := res.Header.Get("Content-Length")
+	if cLen == "" {
+		return 0, nil
+	}
+
+	size, err := strconv.ParseUint(cLen, 10, 64)
+	if err != nil {
+		return 0, errors.New("Cannot read Content-Length")
+	}
+
+	return size, nil
 }

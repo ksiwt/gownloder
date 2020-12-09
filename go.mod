@@ -4,5 +4,5 @@ go 1.13
 
 require (
 	github.com/pkg/errors v0.9.1
-	google.golang.org/api v0.36.0
+	golang.org/x/sync v0.0.0-20201020160332-67f06af15bc9
 )

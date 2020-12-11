@@ -1,7 +1,9 @@
 package idownloader
 
-import "net/url"
+import (
+	"net/url"
+)
 
 type IDownloader interface {
-	HTTPDownloadFile(url url.URL, dst string) error
+	DownloadFile(url url.URL, dst string)  error
 }

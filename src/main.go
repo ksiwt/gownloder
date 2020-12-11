@@ -18,7 +18,8 @@ func main() {
 
 	var iDownloader idownloader.IDownloader
 	iDownloader = downloder.NewDownloader()
-	if err := iDownloader.HTTPDownloadFile(*url, dst); err != nil {
+
+	if err := iDownloader.DownloadFile(*url, dst); err != nil {
 		fmt.Printf("Download Failed: %+v", err)
 
 		os.Exit(1)

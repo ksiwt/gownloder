@@ -89,7 +89,7 @@ func (d *Downloader) downloadSingle(
 	return nil
 }
 
-// Concurrency download thread using range of bytes.
+// downloadConcurrency concurrency download thread using range of bytes.
 func (d *Downloader) downloadConcurrency(
 	url url.URL,
 	dst string,
@@ -147,7 +147,7 @@ func (d *Downloader) downloadConcurrency(
 	return nil
 }
 
-// Download chunk by range of bytes and return file name of downloaded.
+// downloadChunk download chunk by range of bytes and return file name of downloaded.
 func (d *Downloader) downloadChunk(
 	url url.URL,
 	dst string,
@@ -181,7 +181,7 @@ func (d *Downloader) downloadChunk(
 	return &filePath, nil
 }
 
-// Chunk file size and return indexed chunk.
+// chunkFileSize Chunk file size and return indexed chunk.
 func (d *Downloader) chunkFileSize(
 	size uint64,
 	chunkSize uint64,
@@ -204,7 +204,7 @@ func (d *Downloader) chunkFileSize(
 	return chunked
 }
 
-// merge chunked file.
+//mergeChunkedFile merge chunked file.
 func (d *Downloader) mergeChunkedFile(
 	dst string,
 	filePaths []fileForSort,
@@ -239,6 +239,7 @@ func (d *Downloader) mergeChunkedFile(
 	return nil
 }
 
+// wrappedError wrap error err with a stack trace.
 func (d *Downloader) wrappedError(e error) error {
 	return errors.Wrap(e, e.Error())
 }

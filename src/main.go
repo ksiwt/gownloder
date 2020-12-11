@@ -8,23 +8,29 @@ import (
 
 	"gownloder/src/downloder"
 	"gownloder/src/downloder/idownloader"
+	"gownloder/src/progresser"
+	"gownloder/src/progresser/iprogresser"
 )
 
 func main() {
 	u, d := parseFlag()
-
-	var iDownloader idownloader.IDownloader
-	iDownloader = downloder.NewDownloader()
-
 	url, _ := url.ParseRequestURI(u)
 	dst := fmt.Sprintf("%s%s", d, url.Path)
+
+	var iProgresser iprogresser.IProgresser
+	iProgresser = progresser.NewProgresser()
+
+	var iDownloader idownloader.IDownloader
+	iDownloader = downloder.NewDownloader(iProgresser)
+
+	fmt.Println("URL:", url)
 	if err := iDownloader.DownloadFile(*url, dst); err != nil {
-		fmt.Printf("Download Failed: %+v", err)
+		fmt.Printf("\nDownload Failed: %+v", err)
 
 		os.Exit(1)
 	}
 
-	fmt.Println("Download Successfully!")
+	fmt.Println("\nDownload Successfully!")
 }
 
 func parseFlag() (url string, dst string) {

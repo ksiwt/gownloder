@@ -13,6 +13,8 @@ import (
 
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
+
+	"gownloder/src/progresser/iprogresser"
 )
 
 const (
@@ -28,15 +30,20 @@ type fileForSort struct {
 }
 
 type indexChunk struct {
-	start, end uint64
+	start, end int64
 }
 
-// Downloader that implement download methods.
-type Downloader struct{}
+// Downloader implement download methods.
+type Downloader struct{
+	iProgresser iprogresser.IProgresser
+}
 
 // NewDownloader generate instance of Downloader.
-func NewDownloader() *Downloader {
+func NewDownloader(
+	iProgresser iprogresser.IProgresser,
+) *Downloader {
 	return &Downloader{
+		iProgresser: iProgresser,
 	}
 }
 
@@ -46,22 +53,25 @@ func (d *Downloader) DownloadFile(
 	url url.URL,
 	dst string,
 ) error {
+	ctx := context.Background()
+
 	res, err := http.Get(url.String())
 	if err != nil {
 		return d.wrappedError(err)
 	}
 	defer res.Body.Close()
+	fmt.Printf("Response Header: %v\n", res.Header)
 
 	acceptRange := res.Header.Get(acceptRangesHeaderKey)
 	switch acceptRange {
 	// Concurrency download thread using range of bytes.
 	case acceptRangeBytes:
 		procs := runtime.NumCPU()
-		err = d.downloadConcurrency(url, dst, res, procs)
+		err = d.downloadConcurrency(ctx, url, dst, res, procs)
 
 	// Single download.
 	default:
-		err = d.downloadSingle(dst, res)
+		err = d.downloadSingle(ctx, dst, res)
 	}
 	if err != nil {
 		return d.wrappedError(err)
@@ -72,9 +82,17 @@ func (d *Downloader) DownloadFile(
 
 // Single download.
 func (d *Downloader) downloadSingle(
+	ctx context.Context,
 	dst string,
 	res *http.Response,
 ) error {
+	cLen := res.Header.Get("Content-Length")
+	size, _ := strconv.ParseInt(cLen, 10, 64)
+	fmt.Printf("File Size: %d bytes", size)
+
+	// Write progress bar.
+	d.iProgresser.WriteProgressBar(ctx, size, 0, true)
+
 	out, err := os.OpenFile(dst, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0666)
 	if err != nil {
 		return d.wrappedError(err)
@@ -91,19 +109,21 @@ func (d *Downloader) downloadSingle(
 
 // downloadConcurrency concurrency download thread using range of bytes.
 func (d *Downloader) downloadConcurrency(
+	ctx context.Context,
 	url url.URL,
 	dst string,
 	res *http.Response,
 	procs int,
 ) error {
 	cLen := res.Header.Get("Content-Length")
-	size, _ := strconv.ParseUint(cLen, 10, 64)
+	size, _ := strconv.ParseInt(cLen, 10, 64)
+	fmt.Printf("File Size: %d bytes", size)
 
 	// chunk file size in order for chunk file download.
-	chunked := d.chunkFileSize(size, uint64(procs))
+	chunked := d.chunkFileSize(size, int64(procs))
 
 	var filePaths = make([]fileForSort, 0, len(chunked))
-	eg, ctx := errgroup.WithContext(context.Background())
+	eg, ctx := errgroup.WithContext(ctx)
 
 	for index, chunk := range chunked {
 		index := index + 1
@@ -116,7 +136,10 @@ func (d *Downloader) downloadConcurrency(
 				return nil
 
 			default:
-				fmt.Printf("process %d-%d\n", chunk.start, chunk.end)
+				// Write progress bar.
+				size := chunk.end - chunk.start
+				d.iProgresser.WriteProgressBar(ctx, size, index, true)
+
 				filepath, err := d.downloadChunk(url, dst, chunk, index)
 				if err != nil {
 					return d.wrappedError(err)
@@ -183,13 +206,13 @@ func (d *Downloader) downloadChunk(
 
 // chunkFileSize Chunk file size and return indexed chunk.
 func (d *Downloader) chunkFileSize(
-	size uint64,
-	chunkSize uint64,
+	size int64,
+	chunkSize int64,
 ) []indexChunk {
 	splitSize := size / chunkSize
 
 	var chunked = make([]indexChunk, 0)
-	for i := uint64(0); i < size; i += splitSize {
+	for i := int64(0); i < size; i += splitSize {
 		idx := indexChunk{
 			start: i, end: i + splitSize,
 		}

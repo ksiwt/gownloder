@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"path"
 
 	"gownloder/src/downloder"
 	"gownloder/src/downloder/idownloader"
@@ -15,7 +16,9 @@ import (
 func main() {
 	u, d := parseFlag()
 	url, _ := url.ParseRequestURI(u)
-	dst := fmt.Sprintf("%s%s", d, url.Path)
+
+	_, file := path.Split(url.Path)
+	dst := fmt.Sprintf("%s%s", d, file)
 
 	var iProgresser iprogresser.IProgresser
 	iProgresser = progresser.NewProgresser()
@@ -24,6 +27,7 @@ func main() {
 	iDownloader = downloder.NewDownloader(iProgresser)
 
 	fmt.Println("URL:", url)
+	fmt.Printf("File Download to %s \n", dst)
 	if err := iDownloader.DownloadFile(*url, dst); err != nil {
 		fmt.Printf("\nDownload Failed: %+v", err)
 

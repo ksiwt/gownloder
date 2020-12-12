@@ -71,7 +71,7 @@ func (d *Downloader) DownloadFile(
 
 	// Single download.
 	default:
-		err = d.downloadSingle(ctx, dst, res)
+		err = d.downloadSingle(dst, res)
 	}
 	if err != nil {
 		return d.wrappedError(err)
@@ -82,7 +82,6 @@ func (d *Downloader) DownloadFile(
 
 // Single download.
 func (d *Downloader) downloadSingle(
-	ctx context.Context,
 	dst string,
 	res *http.Response,
 ) error {
@@ -91,7 +90,7 @@ func (d *Downloader) downloadSingle(
 	fmt.Printf("File Size: %d bytes", size)
 
 	// Write progress bar.
-	d.iProgresser.WriteProgressBar(ctx, size, 0, true)
+	d.iProgresser.WriteProgressBar(size)
 
 	out, err := os.OpenFile(dst, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0666)
 	if err != nil {
@@ -136,9 +135,8 @@ func (d *Downloader) downloadConcurrency(
 				return nil
 
 			default:
-				// Write progress bar.
 				size := chunk.end - chunk.start
-				d.iProgresser.WriteProgressBar(ctx, size, index, true)
+				d.iProgresser.WriteProgressBar(size)
 
 				filepath, err := d.downloadChunk(url, dst, chunk, index)
 				if err != nil {
